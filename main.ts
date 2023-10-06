@@ -3,6 +3,8 @@ import { TextEmbedder, FilesetResolver, TextEmbedderResult } from '@mediapipe/ta
 // Remember to rename these classes and interfaces!
 let textEmbedder: TextEmbedder;
 
+import { ExampleView, VIEW_TYPE_EXAMPLE } from "./view";
+
 // Before we can use TextEmbedder class we must wait for it to finish loading.
 async function createEmbedder() {
 	console.log("getting embedder")
@@ -35,13 +37,29 @@ export default class ObsidianIa extends Plugin {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
+		this.registerView(
+			VIEW_TYPE_EXAMPLE,
+			(leaf) => new ExampleView(leaf)
+		);
+
+		this.addRibbonIcon("dice", "Activate view", () => {
+			this.activateView();
+		});
+
+
+
+
 		await createEmbedder();
 		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
 		this.statusBarItemEl = this.addStatusBarItem().createEl("span")
 		//this.statusBarItemEl.setText('Status Bar Text');
 		this.readActiveFileAndUpdateLineCount()
-		this.readActiveFileAndEmbed()
 		this.embedVaultFiles()
+		this.readActiveFileAndEmbed()
+	
+
+		console.log(this.app)
+		console.log(this.app.workspace)
 
 		this.app.workspace.on('active-leaf-change', async () => {
 			this.readActiveFileAndUpdateLineCount()
@@ -131,6 +149,19 @@ export default class ObsidianIa extends Plugin {
 		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
+	async activateView() {
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_EXAMPLE);
+
+		await this.app.workspace.getRightLeaf(false).setViewState({
+			type: VIEW_TYPE_EXAMPLE,
+			active: true,
+		});
+
+		this.app.workspace.revealLeaf(
+			this.app.workspace.getLeavesOfType(VIEW_TYPE_EXAMPLE)[0]
+		);
+	}
+
 	private updateLineCount(fileContent?: string) {
 		const count = fileContent ? fileContent.split(/\r\n|\r|\n/).length : 0
 		const linesWord = count === 1 ? "line" : "lines"
@@ -148,7 +179,24 @@ export default class ObsidianIa extends Plugin {
 
 		await this.updateSimilarities()
 		const similarities = this.embeddings[filePath].similarities
-		console.log("SIMILARITY",filePath, similarities)
+		console.log("SIMILARITY", filePath, similarities)
+
+		this.app.workspace.getLeavesOfType(VIEW_TYPE_EXAMPLE).forEach((leaf) => {
+			if (leaf.view instanceof ExampleView) {
+				// Access your view instance.
+				console.log("LEAF", leaf)
+				const data = JSON.stringify(this.embeddings[filePath].similarities)
+				console.log("data", data)
+				leaf.view.updateSims(data)
+				// const container = leaf.view.containerEl
+				// container.children[1];
+				// container.empty();
+				// container.createEl("h4", { text: "Example view" });
+				// container.createEl('div', { text: similarities })
+			}
+
+
+		});
 
 		//new Notice('This is a notice!', this.embeddings[filePath].similarities);
 
@@ -168,7 +216,7 @@ export default class ObsidianIa extends Plugin {
 		//console.log(this.embeddings)
 		for (const [path, emb] of Object.entries(this.embeddings)) {
 			//console.log("--", path, emb.embeddings[0])
-			let similarities = []
+			let similarities = {}
 			for (const [pathCandidate, embCandidate] of Object.entries(this.embeddings)) {
 				if (pathCandidate != path) {
 					const similarity = TextEmbedder.cosineSimilarity(emb.embeddings[0], embCandidate.embeddings[0]);
@@ -181,7 +229,7 @@ export default class ObsidianIa extends Plugin {
 			// similarities = similarities.sort(function(a, b) {
 			// 	return a[1] - b[1];
 			// });
-	
+
 
 		}
 		// const similarities: string[] = []

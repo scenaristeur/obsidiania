@@ -1,7 +1,7 @@
 # ObsidianIA Plugin
 
-
-
+// VIEW		https://docs.obsidian.md/Plugins/User+interface/Views
+createDiv et HTML elements https://docs.obsidian.md/Plugins/User+interface/HTML+elements
 
 
 # inspiration 
