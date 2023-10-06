@@ -138,12 +138,63 @@ export default class ObsidianIa extends Plugin {
 	}
 
 	private async updateEmbedding(filePath: string, fileContent: string) {
-		console.log("embedding ", filePath, fileContent)
+		//console.log("embedding ", filePath, fileContent)
 		// Wait to run the function until inner text is set
 		await sleep(5);
 
 		const embeddingResult: TextEmbedderResult = textEmbedder.embed(fileContent);
-		this.embeddings[filePath] = embeddingResult
+		this.embeddings[filePath] = { embeddings: embeddingResult.embeddings }
+
+
+		await this.updateSimilarities()
+		const similarities = this.embeddings[filePath].similarities
+		console.log("SIMILARITY",filePath, similarities)
+
+		//new Notice('This is a notice!', this.embeddings[filePath].similarities);
+
+		// if (this.embeddings[filePath].similarities) {
+		// 	const sortedSimilarities = this.embeddings[filePath].similarities.sort(function (a, b) {
+		// 		return a[1] - b[1];
+		// 	});
+		// 	console.log(sortedSimilarities)
+		// }
+
+
+
+
+
+	}
+	private async updateSimilarities() {
+		//console.log(this.embeddings)
+		for (const [path, emb] of Object.entries(this.embeddings)) {
+			//console.log("--", path, emb.embeddings[0])
+			let similarities = []
+			for (const [pathCandidate, embCandidate] of Object.entries(this.embeddings)) {
+				if (pathCandidate != path) {
+					const similarity = TextEmbedder.cosineSimilarity(emb.embeddings[0], embCandidate.embeddings[0]);
+					//console.log(similarity)
+					similarities[pathCandidate] = similarity.toFixed(3)
+
+					this.embeddings[path].similarities = similarities
+				}
+			}
+			// similarities = similarities.sort(function(a, b) {
+			// 	return a[1] - b[1];
+			// });
+	
+
+		}
+		// const similarities: string[] = []
+		// for (const [path, emb] of Object.entries(this.embeddings)) {
+		// 	console.log(path, emb)
+		// 	const similarity: number = TextEmbedder.cosineSimilarity(
+		// 		embeddingResult.embeddings[0],
+		// 		emb.embeddings[0]
+		// 	);
+		// 	similarities[path] = similarity.toFixed(2);
+		// }
+
+		// this.embeddings[filePath]['similarities'] = similarities
 	}
 
 
@@ -151,7 +202,7 @@ export default class ObsidianIa extends Plugin {
 		const file = this.app.workspace.getActiveFile()
 		if (file) {
 			const content = await this.app.vault.read(file)
-			console.log(content)
+			//console.log(content)
 			this.updateLineCount(content)
 		}
 		else {
@@ -161,10 +212,10 @@ export default class ObsidianIa extends Plugin {
 
 	private async readActiveFileAndEmbed() {
 		const file = this.app.workspace.getActiveFile()
-		console.log("File", file)
+		//console.log("File", file)
 		if (file) {
 			const content = await this.app.vault.read(file)
-			console.log(content)
+			//console.log(content)
 			this.updateEmbedding(file.path, content)
 		}
 		// else {
@@ -189,12 +240,12 @@ export default class ObsidianIa extends Plugin {
 
 
 		files.forEach(async (file: { path: string; content: string }) => {
-			console.log(file.path, file.content)
+			//	console.log(file.path, file.content)
 			this.updateEmbedding(file.path, file.content)
 
 		});
 
-		console.log("embeddings", this.embeddings)
+		//console.log("embeddings", this.embeddings)
 	}
 
 
