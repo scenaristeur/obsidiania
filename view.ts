@@ -24,14 +24,14 @@ export class ExampleView extends ItemView {
         // list.append(li)
     }
 
-    async updateSims(data) {
+    async updateSims(data: string) {
         // https://docs.obsidian.md/Plugins/User+interface/HTML+elements
         const container = this.containerEl.children[1];
         container.empty();
         container.createEl("h4", { text: "Similarity Bob" });
     //    const div = container.createDiv({text: "hello"})
     //    div.setText(data)
-       let sims = JSON.parse(data)
+       const sims = JSON.parse(data)
        const list = container.createEl('ul')
 
        let sortable = Object.entries(sims)
