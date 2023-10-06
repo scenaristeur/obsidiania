@@ -1,4 +1,14 @@
-# Obsidian Sample Plugin
+# ObsidianIA Plugin
+
+
+
+
+
+# inspiration 
+https://www.youtube.com/watch?v=AgXa03ZxJ88
+
+# tuto
+https://docs.obsidian.md/Plugins/Getting+started/Build+a+plugin
 
 This is a sample plugin for Obsidian (https://obsidian.md).
 

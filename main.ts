@@ -1,32 +1,85 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-
+import { TextEmbedder, FilesetResolver, TextEmbedderResult } from '@mediapipe/tasks-text'
 // Remember to rename these classes and interfaces!
+let textEmbedder: TextEmbedder;
 
-interface MyPluginSettings {
+// Before we can use TextEmbedder class we must wait for it to finish loading.
+async function createEmbedder() {
+	console.log("getting embedder")
+	const textFiles = await FilesetResolver.forTextTasks(
+		"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-text@0.10.0/wasm"
+	);
+	textEmbedder = await TextEmbedder.createFromOptions(textFiles, {
+		baseOptions: {
+			modelAssetPath: `https://storage.googleapis.com/mediapipe-models/text_embedder/universal_sentence_encoder/float32/1/universal_sentence_encoder.tflite`
+		}
+	});
+	console.log("embedder ready")
+	//demosSection.classList.remove("invisible");
+}
+
+
+interface ObsidianIaSettings {
 	mySetting: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: ObsidianIaSettings = {
 	mySetting: 'default'
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class ObsidianIa extends Plugin {
+	statusBarItemEl: HTMLSpanElement
+	settings: ObsidianIaSettings;
+	embeddings = {} as never;
 
-	async onload() {
+	async onload(): Promise<void> {
 		await this.loadSettings();
 
+		await createEmbedder();
+		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
+		this.statusBarItemEl = this.addStatusBarItem().createEl("span")
+		//this.statusBarItemEl.setText('Status Bar Text');
+		this.readActiveFileAndUpdateLineCount()
+		this.readActiveFileAndEmbed()
+		this.embedVaultFiles()
+
+		this.app.workspace.on('active-leaf-change', async () => {
+			this.readActiveFileAndUpdateLineCount()
+			this.readActiveFileAndEmbed()
+
+
+
+			// const files = await this.app.vault.getFiles()
+			// console.log("files", files)
+			// for (let i = 0; i < files.length; i++) {
+			// 	console.log("file", i, files[i].path);
+			// }
+		})
+
+		this.app.workspace.on('editor-change', async editor => {
+			const doc = editor.getDoc()
+			console.log("DOC", doc)
+			const content = doc.getValue()
+			this.updateLineCount(content)
+			const file = this.app.workspace.getActiveFile()
+			if (file) this.updateEmbedding(file.path, content)
+
+		})
+
+
+
+
+
+
 		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
+		const ribbonIconEl = this.addRibbonIcon('dice', 'Obsidian Ia', (evt: MouseEvent) => {
 			// Called when the user clicks the icon.
 			new Notice('This is a notice!');
 		});
 		// Perform additional things with the ribbon
 		ribbonIconEl.addClass('my-plugin-ribbon-class');
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
+
 
 		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
@@ -78,6 +131,74 @@ export default class MyPlugin extends Plugin {
 		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
+	private updateLineCount(fileContent?: string) {
+		const count = fileContent ? fileContent.split(/\r\n|\r|\n/).length : 0
+		const linesWord = count === 1 ? "line" : "lines"
+		this.statusBarItemEl.textContent = `${count} ${linesWord}`
+	}
+
+	private async updateEmbedding(filePath: string, fileContent: string) {
+		console.log("embedding ", filePath, fileContent)
+		// Wait to run the function until inner text is set
+		await sleep(5);
+
+		const embeddingResult: TextEmbedderResult = textEmbedder.embed(fileContent);
+		this.embeddings[filePath] = embeddingResult
+	}
+
+
+	private async readActiveFileAndUpdateLineCount() {
+		const file = this.app.workspace.getActiveFile()
+		if (file) {
+			const content = await this.app.vault.read(file)
+			console.log(content)
+			this.updateLineCount(content)
+		}
+		else {
+			this.updateLineCount(undefined)
+		}
+	}
+
+	private async readActiveFileAndEmbed() {
+		const file = this.app.workspace.getActiveFile()
+		console.log("File", file)
+		if (file) {
+			const content = await this.app.vault.read(file)
+			console.log(content)
+			this.updateEmbedding(file.path, content)
+		}
+		// else {
+		// 	this.updateEmbedding("")
+		// }
+	}
+
+	private async embedVaultFiles() {
+		// const mdfiles = this.app.vault.getMarkdownFiles()
+		// console.log('mdfiles', mdfiles)
+		// for (let i = 0; i < mdfiles.length; i++) {
+		// 	console.log("mdfile", i, mdfiles[i].path);
+		// 	const id = mdfiles[i].path
+		// 	let updateEmbedding()
+		// 	this.embeddings[id] = {}
+		// }
+		const { vault } = this.app;
+
+		const files: any = await Promise.all(
+			vault.getMarkdownFiles().map((file) => { return { path: file.path, content: vault.cachedRead(file) } })
+		);
+
+
+		files.forEach(async (file: { path: string; content: string }) => {
+			console.log(file.path, file.content)
+			this.updateEmbedding(file.path, file.content)
+
+		});
+
+		console.log("embeddings", this.embeddings)
+	}
+
+
+
 	onunload() {
 
 	}
@@ -97,26 +218,26 @@ class SampleModal extends Modal {
 	}
 
 	onOpen() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.setText('Woah!');
 	}
 
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
 
 class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: ObsidianIa;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: ObsidianIa) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
